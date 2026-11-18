@@ -33,7 +33,11 @@ export function exitOf(text, timedOut) {
   return Number.isFinite(n) ? n : -1;
 }
 
-const clipBytes = (u) => dec.decode(u.length > OUT_CAP ? u.subarray(0, OUT_CAP) : u);
+function clipBytes(bytes) {
+  if (bytes.length <= OUT_CAP) return dec.decode(bytes);
+  // A streaming decode leaves a partial final character unflushed.
+  return new TextDecoder().decode(bytes.subarray(0, OUT_CAP), { stream: true });
+}
 
 // engine: the v86 instance (or a fake with the same five methods, for tests).
 export function podOver(engine, { wait = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
@@ -79,7 +83,12 @@ export function podOver(engine, { wait = (ms) => new Promise((r) => setTimeout(r
     const ok = await seen(`@@poddone${id}@@`, (timeout + 15) * 1000);
     const [o, e, x] = await Promise.all([file(`o${id}`), file(`e${id}`), file(`x${id}`)]);
     type(`rm -f /mnt/.pod/c${id} /mnt/.pod/o${id} /mnt/.pod/e${id} /mnt/.pod/x${id}`);
-    return { stdout: clipBytes(o), stderr: clipBytes(e), exitCode: exitOf(dec.decode(x), !ok) };
+    return {
+      stdout: clipBytes(o),
+      stderr: clipBytes(e),
+      exitCode: exitOf(dec.decode(x), !ok),
+      truncated: o.length > OUT_CAP || e.length > OUT_CAP,
+    };
   }
 
   return {

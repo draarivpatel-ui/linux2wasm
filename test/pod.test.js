@@ -5,7 +5,7 @@ import { spawn } from 'node:child_process';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { MAX_FILE, exitOf, podOver, sq } from '../pod.js';
+import { MAX_FILE, OUT_CAP, exitOf, podOver, sq } from '../pod.js';
 
 function fakeEngine(dir) {
   const shared = join(dir, 'mnt');
@@ -51,6 +51,23 @@ describe('browser pod', () => {
     expect(r.stdout).toContain(join(dir, 'home'));
     expect(r.stderr).toBe('oops\n');
     expect(r.exitCode).toBe(3);
+  });
+
+  test('run marks either output stream as truncated only above the byte cap', async () => {
+    const exact = await pod.run('head -c ' + OUT_CAP + " /dev/zero | tr '\\000' a");
+    expect(exact.stdout.length).toBe(OUT_CAP);
+    expect(exact.truncated).toBe(false);
+
+    const clipped = await pod.run('head -c ' + (OUT_CAP + 1) + " /dev/zero | tr '\\000' b >&2");
+    expect(clipped.stderr.length).toBe(OUT_CAP);
+    expect(clipped.truncated).toBe(true);
+  });
+
+  test('run drops a partial UTF-8 character at the output cap', async () => {
+    const result = await pod.run('head -c ' + (OUT_CAP - 1) + " /dev/zero | tr '\\000' a; printf 'é'");
+    expect(result.stdout.length).toBe(OUT_CAP - 1);
+    expect(result.stdout.endsWith('a')).toBe(true);
+    expect(result.truncated).toBe(true);
   });
 
   test('output with the done mark or a prompt in it cannot end a command early', async () => {

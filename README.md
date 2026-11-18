@@ -11,7 +11,7 @@ import { startBrowserPod } from 'https://your.site/linux2wasm/pod.js';
 
 const pod = await startBrowserPod({ base: 'https://your.site/linux2wasm/vendor/' });
 await pod.write('site/index.html', '<h1>Coffee</h1>');
-const r = await pod.run('ls -la site && wc -c site/index.html'); // { stdout, stderr, exitCode }
+const r = await pod.run('ls -la site && wc -c site/index.html'); // { stdout, stderr, exitCode, truncated }
 const f = await pod.read('site/index.html');                     // { content, encoding: 'utf8' | 'base64' }
 await pod.stop();
 ```
@@ -24,6 +24,7 @@ Try it: `sh vendor/get.sh`, serve this folder (`python3 -m http.server`) and ope
 |---|---|
 | Start | About 3 seconds after the files are in the browser cache (about 12.6 MB the first time) |
 | Shell | busybox `sh` with `sed`, `awk`, `tar`, `gzip`, `base64`, `wget`, `curl` |
+| Run output | Up to 1,000,000 bytes (1 MB) each for stdout and stderr. `truncated` is true if either stream exceeds the cap. Incomplete UTF-8 characters at the cut are dropped. |
 | Memory | 128 MB by default (`memoryMb`) |
 | Files | Kept in the tab's memory. Closing or reloading the tab deletes them |
 | Internet | None inside the pod. `curl` and `wget` are there but have no network |
